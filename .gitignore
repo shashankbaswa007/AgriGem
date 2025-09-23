@@ -1,0 +1,37 @@
+# --- Secrets ---
+# This is the most important line. Never commit your API keys.
+.env
+
+# --- Environment ---
+# Ignore the Python virtual environment folder.
+.venv/
+/venv/
+venv/
+
+# --- Generated Files & Models ---
+# Ignore the large master dataset you create.
+master_dataset_odisha.csv
+master_dataset_cleaned.csv
+
+# Ignore saved machine learning models.
+*.pkl
+
+# --- Data Files ---
+# It's good practice to ignore large data files.
+# You can be more specific if you have small CSVs you want to track.
+*.csv
+*.xlsx
+*.numbers
+/knowledge_base/
+/data/
+
+# --- System & Cache Files ---
+# Ignore Python cache files.
+__pycache__/
+*.pyc
+
+# Ignore Jupyter/Kaggle notebook checkpoints.
+.ipynb_checkpoints/
+
+# Ignore macOS system files.
+.DS_Store
