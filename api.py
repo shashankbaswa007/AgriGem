@@ -16,7 +16,7 @@ CORS(app)
 # Global variable to hold the loaded agent
 agent_executor = None
 
-# --- 2. CROP PARAMETERS DATABASE FOR THE RECOMMENDATION ENGINE ---
+# --- 2. CROP PARAMETERS DATABASE ---
 CROP_PARAMETERS = {
     'rice': {'water_per_hectare_liters': 12_000_000, 'nitrogen_per_tonne': 20.0},
     'maize': {'water_per_hectare_liters': 6_000_000, 'nitrogen_per_tonne': 22.0},
@@ -58,9 +58,20 @@ def initialize_agent():
     global agent_executor
     print("--- Initializing Web Search Agent ---")
     load_dotenv()
+
+    google_key = os.getenv("GOOGLE_API_KEY")
+    tavily_key = os.getenv("TAVILY_API_KEY")
+
+    if not google_key:
+        print("❌ ERROR: GOOGLE_API_KEY not set. Skipping agent initialization.")
+        return
+
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-        tools = [TavilySearchResults(max_results=3)]
+        tools = []
+        if tavily_key:
+            tools.append(TavilySearchResults(max_results=3))
+
         prompt = hub.pull("hwchase17/react")
         agent = create_react_agent(llm, tools, prompt)
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
@@ -82,26 +93,31 @@ def home():
 # --- 6. API ENDPOINTS ---
 @app.route('/ask', methods=['POST'])
 def ask_gem():
-    if not agent_executor:
-        return jsonify({"error": "Agent is not initialized."}), 503
+    global agent_executor
     question = request.json.get('question')
+
     if not question:
         return jsonify({"error": "No question provided"}), 400
+    if not agent_executor:
+        return jsonify({"error": "AI Agent not available. Please check GOOGLE_API_KEY and restart the server."}), 503
+
     try:
         response = agent_executor.invoke({"input": question})
-        return jsonify({"answer": response['output']})
+        return jsonify({"answer": response.get('output', 'No response generated')})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Agent execution failed: {str(e)}'}), 500
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
         data = request.get_json()
         crop = data.get('crop')
-        area = float(data.get('area'))
-        target_yield = float(data.get('target_yield'))
+        area = float(data.get('area', 0))
+        target_yield = float(data.get('target_yield', 0))
+
         if not all([crop, area, target_yield]):
-            return jsonify({"error": "Missing required fields"}), 400
+            return jsonify({"error": "Missing required fields (crop, area, target_yield)"}), 400
+
         report_text = generate_recommendations(crop, area, target_yield)
         return jsonify({"report": report_text})
     except Exception as e:
@@ -110,5 +126,5 @@ def recommend():
 # --- 7. RUN THE SERVER ---
 if __name__ == '__main__':
     initialize_agent()
-    port = int(os.environ.get("PORT", 5001))  # ✅ Render gives PORT automatically
+    port = int(os.environ.get("PORT", 5001))  # Render auto-assigns PORT
     app.run(host="0.0.0.0", port=port, debug=True)
