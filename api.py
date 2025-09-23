@@ -18,10 +18,18 @@ agent_executor = None
 
 # --- 2. CROP PARAMETERS DATABASE FOR THE RECOMMENDATION ENGINE ---
 CROP_PARAMETERS = {
-    'rice': { 'water_per_hectare_liters': 12_000_000, 'nitrogen_per_tonne': 20.0 },
-    'maize': { 'water_per_hectare_liters': 6_000_000, 'nitrogen_per_tonne': 22.0 },
-    # Add other crops here...
-    'default': { 'water_per_hectare_liters': 5_500_000, 'nitrogen_per_tonne': 15.0 }
+    'rice': {'water_per_hectare_liters': 12_000_000, 'nitrogen_per_tonne': 20.0},
+    'maize': {'water_per_hectare_liters': 6_000_000, 'nitrogen_per_tonne': 22.0},
+    'cotton': {'water_per_hectare_liters': 8_480_000, 'nitrogen_per_tonne': 25.0},
+    'pearl_millet': {'water_per_hectare_liters': 3_230_000, 'nitrogen_per_tonne': 15.0},
+    'finger_millet': {'water_per_hectare_liters': 3_230_000, 'nitrogen_per_tonne': 15.0},
+    'green_gram': {'water_per_hectare_liters': 3_246_000, 'nitrogen_per_tonne': 20.0},
+    'black_gram': {'water_per_hectare_liters': 2_700_000, 'nitrogen_per_tonne': 18.0},
+    'groundnut': {'water_per_hectare_liters': 2_700_000, 'nitrogen_per_tonne': 18.0},
+    'sesame': {'water_per_hectare_liters': 4_900_000, 'nitrogen_per_tonne': 20.0},
+    'mustard': {'water_per_hectare_liters': 4_000_000, 'nitrogen_per_tonne': 22.0},
+    'lentil': {'water_per_hectare_liters': 3_500_000, 'nitrogen_per_tonne': 20.0},
+    'default': {'water_per_hectare_liters': 5_500_000, 'nitrogen_per_tonne': 15.0}
 }
 
 # --- 3. RECOMMENDATION ENGINE LOGIC ---
@@ -60,9 +68,18 @@ def initialize_agent():
     except Exception as e:
         print(f"❌ ERROR initializing agent: {e}")
 
-# --- 5. CREATE THE API ENDPOINTS ---
+# --- 5. ROOT ENDPOINT ---
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "message": "✅ AgriGem API is running!",
+        "endpoints": {
+            "ask": "/ask  (POST with {question})",
+            "recommend": "/recommend  (POST with {crop, area, target_yield})"
+        }
+    })
 
-# Endpoint for the Web Search Agent
+# --- 6. API ENDPOINTS ---
 @app.route('/ask', methods=['POST'])
 def ask_gem():
     if not agent_executor:
@@ -76,7 +93,6 @@ def ask_gem():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint for the Recommendation Engine
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
@@ -91,7 +107,8 @@ def recommend():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# --- 6. RUN THE SERVER ---
+# --- 7. RUN THE SERVER ---
 if __name__ == '__main__':
     initialize_agent()
-    app.run(port=5001, debug=True)
+    port = int(os.environ.get("PORT", 5001))  # ✅ Render gives PORT automatically
+    app.run(host="0.0.0.0", port=port, debug=True)
