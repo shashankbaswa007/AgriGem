@@ -17,3 +17,7 @@ xgboost
 matplotlib
 seaborn
 joblib
+nltk
+tf-keras
+# ... (all your other libraries)
+tavily-python
