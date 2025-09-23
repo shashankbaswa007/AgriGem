@@ -1,23 +1,8 @@
-Flask
+flask
 flask-cors
-gunicorn
 python-dotenv
 langchain
 langchain-community
 langchain-google-genai
-langchain-huggingface
-sentence-transformers
-chromadb
-unstructured[xlsx]
-PyMuPDF
-pandas
-numpy
-scikit-learn
-xgboost
-matplotlib
-seaborn
-joblib
-nltk
-tf-keras
-# ... (all your other libraries)
-tavily-python
+google-generativeai
+gunicorn   # production server instead of Flask dev server
