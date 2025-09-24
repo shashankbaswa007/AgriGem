@@ -99,8 +99,7 @@ def ask_gem():
     question = data.get('question')
     if not question:
         return jsonify({"error": "No question provided"}), 400
-    if not agent_executor:
-        return jsonify({"error": "AI Agent not available. Please check GOOGLE_API_KEY and restart the server."}), 503
+    
 
     try:
         response = agent_executor.invoke({"input": question})
