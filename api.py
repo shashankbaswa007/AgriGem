@@ -59,19 +59,17 @@ def initialize_agent():
     print("--- Initializing Web Search Agent ---")
     load_dotenv()
 
+    # Explicitly check for keys and print status
     google_key = os.getenv("GOOGLE_API_KEY")
     tavily_key = os.getenv("TAVILY_API_KEY")
 
-    if not google_key:
-        print("❌ ERROR: GOOGLE_API_KEY not set. Skipping agent initialization.")
-        return
+    if not google_key or not tavily_key:
+        print("❌ CRITICAL ERROR: GOOGLE_API_KEY or TAVILY_API_KEY not found in environment.")
+        return # Stop initialization if keys are missing
 
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-        tools = []
-        if tavily_key:
-            tools.append(TavilySearchResults(max_results=3))
-
+        tools = [TavilySearchResults(max_results=3)]
         prompt = hub.pull("hwchase17/react")
         agent = create_react_agent(llm, tools, prompt)
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
