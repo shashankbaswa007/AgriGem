@@ -94,8 +94,11 @@ def home():
 @app.route('/ask', methods=['POST'])
 def ask_gem():
     global agent_executor
-    question = request.json.get('question')
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON input"}), 400
 
+    question = data.get('question')
     if not question:
         return jsonify({"error": "No question provided"}), 400
     if not agent_executor:
@@ -109,17 +112,24 @@ def ask_gem():
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON input"}), 400
+
+    crop = data.get('crop')
+    area = data.get('area')
+    target_yield = data.get('target_yield')
+
+    if not crop or area is None or target_yield is None:
+        return jsonify({"error": "Missing required fields (crop, area, target_yield)"}), 400
+
     try:
-        data = request.get_json()
-        crop = data.get('crop')
-        area = float(data.get('area', 0))
-        target_yield = float(data.get('target_yield', 0))
-
-        if not all([crop, area, target_yield]):
-            return jsonify({"error": "Missing required fields (crop, area, target_yield)"}), 400
-
+        area = float(area)
+        target_yield = float(target_yield)
         report_text = generate_recommendations(crop, area, target_yield)
         return jsonify({"report": report_text})
+    except ValueError:
+        return jsonify({"error": "Invalid numeric values for area or target_yield"}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
