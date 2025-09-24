@@ -36,11 +36,9 @@ CROP_PARAMETERS = {
 def generate_recommendations(crop, area, target_yield):
     crop_key = crop.lower()
     params = CROP_PARAMETERS.get(crop_key, CROP_PARAMETERS['default'])
-
     total_water = params['water_per_hectare_liters'] * area
     total_nitrogen = target_yield * area * params['nitrogen_per_tonne']
     pesticide_recommendation = "Follow Integrated Pest Management (IPM) practices. Apply as needed based on scouting."
-
     report = f"""=== Crop Optimization Report for {crop.title()} ===
 
 - Use {total_water:,.0f} liters of water
@@ -48,7 +46,6 @@ def generate_recommendations(crop, area, target_yield):
 - {pesticide_recommendation}
 
 🌱 This plan is optimized for an estimated yield of {target_yield:.2f} tonnes per hectare."""
-
     if total_water > 10_000_000:
         report += "\n💧 Note: Water usage is high. Consider irrigating during the early morning or evening to reduce evaporation."
     return report
@@ -58,15 +55,11 @@ def initialize_agent():
     global agent_executor
     print("--- Initializing Web Search Agent ---")
     load_dotenv()
-
-    # Explicitly check for keys and print status
     google_key = os.getenv("GOOGLE_API_KEY")
     tavily_key = os.getenv("TAVILY_API_KEY")
-
     if not google_key or not tavily_key:
         print("❌ CRITICAL ERROR: GOOGLE_API_KEY or TAVILY_API_KEY not found in environment.")
-        return # Stop initialization if keys are missing
-
+        return
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
         tools = [TavilySearchResults(max_results=3)]
@@ -83,23 +76,24 @@ def home():
     return jsonify({
         "message": "✅ AgriGem API is running!",
         "endpoints": {
-            "ask": "/ask  (POST with {question})",
-            "recommend": "/recommend  (POST with {crop, area, target_yield})"
+            "ask": "/ask (POST with {question})",
+            "recommend": "/recommend (POST with {crop, area, target_yield})"
         }
     })
 
 # --- 6. API ENDPOINTS ---
 @app.route('/ask', methods=['POST'])
 def ask_gem():
-    global agent_executor
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
-
     question = data.get('question')
     if not question:
         return jsonify({"error": "No question provided"}), 400
     
+    # FIXED: Re-added the check to ensure the agent is initialized before use
+    if not agent_executor:
+        return jsonify({"error": "AI Agent not available. Please check server logs for initialization errors."}), 503
 
     try:
         response = agent_executor.invoke({"input": question})
@@ -112,14 +106,11 @@ def recommend():
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
-
     crop = data.get('crop')
     area = data.get('area')
     target_yield = data.get('target_yield')
-
     if not crop or area is None or target_yield is None:
         return jsonify({"error": "Missing required fields (crop, area, target_yield)"}), 400
-
     try:
         area = float(area)
         target_yield = float(target_yield)
@@ -133,5 +124,6 @@ def recommend():
 # --- 7. RUN THE SERVER ---
 if __name__ == '__main__':
     initialize_agent()
-    port = int(os.environ.get("PORT", 5001))  # Render auto-assigns PORT
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # Use the PORT environment variable provided by Render
+    port = int(os.environ.get("PORT", 10000)) 
+    app.run(host="0.0.0.0", port=port)
