@@ -17,6 +17,7 @@ CORS(app)
 agent_executor = None
 
 # --- 2. CROP PARAMETERS DATABASE ---
+# (This section is unchanged)
 CROP_PARAMETERS = {
     'rice': {'water_per_hectare_liters': 12_000_000, 'nitrogen_per_tonne': 20.0},
     'maize': {'water_per_hectare_liters': 6_000_000, 'nitrogen_per_tonne': 22.0},
@@ -32,13 +33,17 @@ CROP_PARAMETERS = {
     'default': {'water_per_hectare_liters': 5_500_000, 'nitrogen_per_tonne': 15.0}
 }
 
+
 # --- 3. RECOMMENDATION ENGINE LOGIC ---
+# (This section is unchanged)
 def generate_recommendations(crop, area, target_yield):
     crop_key = crop.lower()
     params = CROP_PARAMETERS.get(crop_key, CROP_PARAMETERS['default'])
+
     total_water = params['water_per_hectare_liters'] * area
     total_nitrogen = target_yield * area * params['nitrogen_per_tonne']
     pesticide_recommendation = "Follow Integrated Pest Management (IPM) practices. Apply as needed based on scouting."
+
     report = f"""=== Crop Optimization Report for {crop.title()} ===
 
 - Use {total_water:,.0f} liters of water
@@ -46,6 +51,7 @@ def generate_recommendations(crop, area, target_yield):
 - {pesticide_recommendation}
 
 🌱 This plan is optimized for an estimated yield of {target_yield:.2f} tonnes per hectare."""
+
     if total_water > 10_000_000:
         report += "\n💧 Note: Water usage is high. Consider irrigating during the early morning or evening to reduce evaporation."
     return report
@@ -53,24 +59,45 @@ def generate_recommendations(crop, area, target_yield):
 # --- 4. SETUP FUNCTION TO CREATE THE WEB SEARCH AGENT ---
 def initialize_agent():
     global agent_executor
-    print("--- Initializing Web Search Agent ---")
+    print("--- Attempting to initialize Web Search Agent ---")
     load_dotenv()
+
+    # Explicitly check for keys and print their status
     google_key = os.getenv("GOOGLE_API_KEY")
     tavily_key = os.getenv("TAVILY_API_KEY")
-    if not google_key or not tavily_key:
-        print("❌ CRITICAL ERROR: GOOGLE_API_KEY or TAVILY_API_KEY not found in environment.")
+
+    if not google_key:
+        print("❌ CRITICAL ERROR: GOOGLE_API_KEY environment variable not found.")
         return
+    else:
+        print("✅ GOOGLE_API_KEY found.")
+
+    if not tavily_key:
+        print("❌ CRITICAL ERROR: TAVILY_API_KEY environment variable not found.")
+        return
+    else:
+        print("✅ TAVILY_API_KEY found.")
+
     try:
+        print("Initializing LLM and Tools...")
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
         tools = [TavilySearchResults(max_results=3)]
+        
+        print("Pulling prompt from LangChain Hub...")
         prompt = hub.pull("hwchase17/react")
+        
+        print("Creating agent...")
         agent = create_react_agent(llm, tools, prompt)
+        
+        print("Creating Agent Executor...")
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        
         print("✅ Web Search Agent initialized successfully.")
     except Exception as e:
-        print(f"❌ ERROR initializing agent: {e}")
+        print(f"❌ ERROR occurred during agent initialization: {e}")
 
-# --- 5. ROOT ENDPOINT ---
+# --- 5. API ENDPOINTS ---
+# (This section is unchanged)
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -81,20 +108,16 @@ def home():
         }
     })
 
-# --- 6. API ENDPOINTS ---
 @app.route('/ask', methods=['POST'])
 def ask_gem():
+    if not agent_executor:
+        return jsonify({"error": "AI Agent not available. Please check GOOGLE_API_KEY and restart the server."}), 503
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
     question = data.get('question')
     if not question:
         return jsonify({"error": "No question provided"}), 400
-    
-    # FIXED: Re-added the check to ensure the agent is initialized before use
-    if not agent_executor:
-        return jsonify({"error": "AI Agent not available. Please check server logs for initialization errors."}), 503
-
     try:
         response = agent_executor.invoke({"input": question})
         return jsonify({"answer": response.get('output', 'No response generated')})
@@ -121,7 +144,7 @@ def recommend():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# --- 7. RUN THE SERVER ---
+# --- 6. RUN THE SERVER ---
 if __name__ == '__main__':
     initialize_agent()
     # Use the PORT environment variable provided by Render
