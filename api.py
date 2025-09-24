@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -31,12 +32,14 @@ CROP_PARAMETERS = {
     'default': {'water_per_hectare_liters': 5_500_000, 'nitrogen_per_tonne': 15.0}
 }
 
-# --- 3. RECOMMENDATION ENGINE ---
+# --- 3. RECOMMENDATION ENGINE LOGIC ---
 def generate_recommendations(crop, area, target_yield):
-    params = CROP_PARAMETERS.get(crop.lower(), CROP_PARAMETERS['default'])
+    crop_key = crop.lower()
+    params = CROP_PARAMETERS.get(crop_key, CROP_PARAMETERS['default'])
+
     total_water = params['water_per_hectare_liters'] * area
     total_nitrogen = target_yield * area * params['nitrogen_per_tonne']
-    pesticide_recommendation = "Follow Integrated Pest Management (IPM) practices. Apply as needed."
+    pesticide_recommendation = "Follow Integrated Pest Management (IPM) practices. Apply as needed based on scouting."
 
     report = f"""=== Crop Optimization Report for {crop.title()} ===
 
@@ -44,46 +47,40 @@ def generate_recommendations(crop, area, target_yield):
 - Apply {total_nitrogen:.2f} kg of nitrogen fertilizer
 - {pesticide_recommendation}
 
-🌱 Optimized for estimated yield of {target_yield:.2f} tonnes per hectare."""
+🌱 This plan is optimized for an estimated yield of {target_yield:.2f} tonnes per hectare."""
 
     if total_water > 10_000_000:
-        report += "\n💧 Note: Water usage is high. Consider irrigating early morning or evening."
+        report += "\n💧 Note: Water usage is high. Consider irrigating early morning/evening."
     return report
 
-# --- 4. INITIALIZE AI AGENT ---
+# --- 4. FUNCTION TO INITIALIZE AGENT ---
 def initialize_agent():
     global agent_executor
+    load_dotenv()
+
     google_key = os.getenv("GOOGLE_API_KEY")
     tavily_key = os.getenv("TAVILY_API_KEY")
 
     if not google_key:
-        print("❌ ERROR: GOOGLE_API_KEY not found in environment variables.")
-        return
+        print("❌ ERROR: GOOGLE_API_KEY not set.")
+        return None
+
+    if not tavily_key:
+        print("❌ ERROR: TAVILY_API_KEY not set.")
+        return None
 
     try:
-        print("Initializing LLM with API key...")
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            temperature=0,
-            api_key=google_key  # Pass API key explicitly
-        )
-
-        tools = []
-        if tavily_key:
-            tools.append(TavilySearchResults(max_results=3))
-
-        print("Pulling prompt from LangChain Hub...")
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+        tools = [TavilySearchResults(max_results=3)]
         prompt = hub.pull("hwchase17/react")
-
-        print("Creating agent...")
         agent = create_react_agent(llm, tools, prompt)
-
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
         print("✅ AI Agent initialized successfully.")
     except Exception as e:
         print(f"❌ ERROR initializing agent: {e}")
+        agent_executor = None
 
-# --- 5. API ENDPOINTS ---
+# --- 5. ROOT ENDPOINT ---
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -94,20 +91,27 @@ def home():
         }
     })
 
+# --- 6. ASK ENDPOINT (lazy initialization) ---
 @app.route('/ask', methods=['POST'])
 def ask_gem():
+    global agent_executor
     if not agent_executor:
-        return jsonify({"error": "AI Agent not available. Please check GOOGLE_API_KEY and redeploy."}), 503
+        initialize_agent()
+        if not agent_executor:
+            return jsonify({"error": "AI Agent failed to initialize. Check GOOGLE_API_KEY and redeploy."}), 503
+
     data = request.get_json(silent=True)
     question = data.get('question') if data else None
     if not question:
         return jsonify({"error": "No question provided"}), 400
+
     try:
         response = agent_executor.invoke({"input": question})
         return jsonify({"answer": response.get('output', 'No response generated')})
     except Exception as e:
-        return jsonify({'error': f'Agent execution failed: {str(e)}'}), 500
+        return jsonify({"error": f"Agent execution failed: {str(e)}"}), 500
 
+# --- 7. RECOMMEND ENDPOINT ---
 @app.route('/recommend', methods=['POST'])
 def recommend():
     data = request.get_json(silent=True)
@@ -126,10 +130,10 @@ def recommend():
     except ValueError:
         return jsonify({"error": "Invalid numeric values for area or target_yield"}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-# --- 6. RUN SERVER ---
+# --- 8. RUN SERVER ---
 if __name__ == '__main__':
-    initialize_agent()
+    # Do NOT pre-initialize agent; let lazy init handle it
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
